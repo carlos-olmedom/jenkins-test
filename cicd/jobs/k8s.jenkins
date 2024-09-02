@@ -1,0 +1,31 @@
+#!/usr/bin/env groovy
+
+pipelineJob('k8s-e2e') {
+    displayName('Jenkins Test Repository')
+
+    logRotator {
+        numToKeep(10)
+        daysToKeep(30)
+    }
+
+    configure { project ->
+        project / 'properties' / 'org.jenkinsci.plugins.workflow.job.properties.DurabilityHintJobProperty' {
+            hint('PERFORMANCE_OPTIMIZED')
+        }
+    }
+
+    definition {
+        cpsScm {
+            scm {
+                git {
+                    remote {
+                        url('https://github.com/carlos-olmedom/jenkins-test.git')  // Your repository URL
+                        credentials('k8s-user-pass')  // The ID of the credentials you created
+                    }
+                    branches('*/main')  // Branch to build from
+                }
+            }
+            scriptPath('cicd/pipelines/k8s.jenkins')  // Path to the Jenkinsfile within your repo
+        }
+    }
+}
