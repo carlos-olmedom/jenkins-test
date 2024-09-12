@@ -38,7 +38,7 @@ envVars: [
             container('kubectl') {
                 sh '''
                 # Apply the Kubernetes YAML file
-                kubectl apply -f ./k8s/k8s-deployment.yaml
+                kubectl apply -f cicd/k8s/k8s-deployment.yaml
                 '''
             }
         }
