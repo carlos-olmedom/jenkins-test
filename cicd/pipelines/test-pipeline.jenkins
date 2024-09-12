@@ -1,15 +1,18 @@
-pipeline {
-    agent any
-    stages {
-        stage('Test') {
-            steps {
-                sh 'mvn test'
+#!/usr/bin/env groovy
+
+def label = "k8s-${UUID.randomUUID().toString()}"
+def home = "/home/jenkins"
+def workspace = "${home}/workspace/build-jenkins-operator"
+def workdir = "${workspace}/src/github.com/jenkinsci/kubernetes-operator/"
+
+podTemplate(label: 'my-pod-template2', containers: [
+    containerTemplate(name: 'alpine', image: 'alpine:3.11', command: 'cat', ttyEnabled: true)
+]) {
+    node('my-pod-template') {
+        stage('Run on Alpine') {
+            container('alpine') {
+                sh 'echo "Test!"'
             }
-        }
-    }
-    post {
-        success {
-            echo 'Tests completed successfully'
         }
     }
 }
