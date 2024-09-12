@@ -38,7 +38,7 @@ envVars: [
                 # Verify kubectl installation
                 kubectl version --client
                 # Apply the Kubernetes YAML file
-                # kubectl apply -f cicd/k8s/k8s-deployment.yaml
+                kubectl apply -f cicd/k8s/k8s-deployment.yaml
                 '''
             }
         }
