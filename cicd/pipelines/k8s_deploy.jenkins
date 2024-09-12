@@ -30,7 +30,7 @@ envVars: [
                 aws configure set region eu-west-1
 
                 # Set up Kubernetes configuration for EKS
-                aws eks update-kubeconfig --name eu-west-1
+                aws eks --region eu-west-1 update-kubeconfig --name AlamoFRA_dev
                 '''
             }
         }
