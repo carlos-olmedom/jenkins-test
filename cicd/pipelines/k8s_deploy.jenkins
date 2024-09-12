@@ -8,12 +8,6 @@ podTemplate(label: label, containers: [
         image: 'amazon/aws-cli',  // AWS CLI container image
         command: 'cat', 
         ttyEnabled: true
-    ),
-    containerTemplate(
-        name: 'kubectl', 
-        image: 'lachlanevenson/k8s-kubectl:v1.18.0',  // kubectl container image
-        command: 'cat', 
-        ttyEnabled: true
     )
 ],
 envVars: [
@@ -35,15 +29,16 @@ envVars: [
 
                 # Set up Kubernetes configuration for EKS
                 aws eks --region eu-west-1 update-kubeconfig --name AlamoFRA_dev
-                '''
-            }
-        }
-        stage('Deploy Kubernetes YAML') {
-            container('kubectl') {
-                sh '''
+
+                # Install kubectl
+                # curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                # chmod +x kubectl
+                # mv kubectl /usr/local/bin/kubectl
+
+                # Verify kubectl installation
+                kubectl version --client
                 # Apply the Kubernetes YAML file
                 # kubectl apply -f cicd/k8s/k8s-deployment.yaml
-                kubectl get all -n fra-api
                 '''
             }
         }
