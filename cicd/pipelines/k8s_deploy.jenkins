@@ -21,6 +21,10 @@ envVars: [
     secretEnvVar(key: 'AWS_SECRET_ACCESS_KEY', secretName: 'aws-credentials', secretKey: 'AWS_SECRET_ACCESS_KEY')
 ]) {
     node(label) {
+        stage('Checkout Code') {
+            // Checkout the repository where your k8s-deployment.yaml file is located
+            checkout scm
+        }
         stage('Configure AWS CLI and EKS') {
             container('aws-cli') {
                 sh '''
