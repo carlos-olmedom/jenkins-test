@@ -4,14 +4,14 @@ def label = "aws-s3-${UUID.randomUUID().toString()}"
 
 podTemplate(label: label, containers: [
     containerTemplate(
-        name: 'alpine', 
-        image: 'alpine:3.11', 
+        name: 'aws-cli', 
+        image: 'amazon/aws-cli',  // AWS CLI container image
         command: 'cat', 
         ttyEnabled: true
     ),
     containerTemplate(
-        name: 'aws-cli', 
-        image: 'amazonlinux:2', 
+        name: 'kubectl', 
+        image: 'lachlanevenson/k8s-kubectl:v1.18.0',  // kubectl container image
         command: 'cat', 
         ttyEnabled: true
     )
@@ -21,32 +21,23 @@ envVars: [
     secretEnvVar(key: 'AWS_SECRET_ACCESS_KEY', secretName: 'aws-credentials', secretKey: 'AWS_SECRET_ACCESS_KEY')
 ]) {
     node(label) {
-        stage('Install AWS CLI') {
-            container('aws-cli') {
-                sh '''
-                # Update and install aws-cli
-                yum update -y
-                yum install -y aws-cli
-                '''
-            }
-        }
-        stage('Configure AWS CLI') {
+        stage('Configure AWS CLI and EKS') {
             container('aws-cli') {
                 sh '''
                 # Configure AWS CLI with the credentials
                 aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
                 aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
                 aws configure set region eu-west-1
+
+                # Set up Kubernetes configuration for EKS
+                aws eks update-kubeconfig --name eu-west-1
                 '''
             }
         }
-        stage('Test S3 Connection') {
-            container('aws-cli') {
+        stage('Deploy Kubernetes YAML') {
+            container('kubectl') {
                 sh '''
-                # Set up Kubernetes credentials (adjust for your cluster)
-                aws eks update-kubeconfig --name <cluster-name>
-                
-                # Apply Kubernetes resources
+                # Apply the Kubernetes YAML file
                 kubectl apply -f ./k8s/k8s-deployment.yaml
                 '''
             }
