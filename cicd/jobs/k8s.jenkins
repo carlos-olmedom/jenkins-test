@@ -1,31 +1,30 @@
-#!/usr/bin/env groovy
+def pipelines = [
+    [name: 'k8s-e2e', scriptPath: 'cicd/pipelines/k8s.jenkins'],
+    [name: 'pipeline-test', scriptPath: 'cicd/pipelines/test-pipeline.jenkins']
+]
 
-pipelineJob('k8s-e2e') {
-    displayName('Jenkins Test Repository')
+pipelines.each { pipeline ->
+    pipelineJob(pipeline.name) {
+        displayName("Pipeline for ${pipeline.name}")
 
-    logRotator {
-        numToKeep(10)
-        daysToKeep(30)
-    }
-
-    configure { project ->
-        project / 'properties' / 'org.jenkinsci.plugins.workflow.job.properties.DurabilityHintJobProperty' {
-            hint('PERFORMANCE_OPTIMIZED')
+        logRotator {
+            numToKeep(10)
+            daysToKeep(30)
         }
-    }
 
-    definition {
-        cpsScm {
-            scm {
-                git {
-                    remote {
-                        url('https://github.com/carlos-olmedom/jenkins-test.git')  // Your repository URL
-                        credentials('jenkins-operator')  // The ID of the credentials you created
+        definition {
+            cpsScm {
+                scm {
+                    git {
+                        remote {
+                            url('https://github.com/carlos-olmedom/jenkins-test.git')
+                            credentials('jenkins-operator')
+                        }
+                        branches('*/main')  // All pipelines come from the same branch 'main'
                     }
-                    branches('*/main')  // Branch to build from
                 }
+                scriptPath(pipeline.scriptPath)  // Each pipeline can use a different Jenkinsfile
             }
-            scriptPath('cicd/pipelines/k8s.jenkins')  // Path to the Jenkinsfile within your repo
         }
     }
 }
