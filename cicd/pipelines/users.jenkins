@@ -1,5 +1,10 @@
 #!/usr/bin/env groovy
 
+// Import statements should be at the top of the file
+import hudson.security.*
+import jenkins.model.*
+import hudson.tasks.Mailer
+
 def label = "k8s-${UUID.randomUUID().toString()}"
 def home = "/home/jenkins"
 def workspace = "${home}/workspace/build-jenkins-operator"
@@ -16,10 +21,6 @@ podTemplate(label: 'my-pod-template2', containers: [
         stage('Run on Alpine') {
             container('alpine') {
                 sh 'echo "Running User Creation!"'
-
-                import hudson.security.*
-                import jenkins.model.*
-                import hudson.tasks.Mailer // Make sure this is imported
 
                 // Load the user data from YAML (assuming the file is in YAML format)
                 def users = readYaml file: 'cicd/users/users.yaml'
