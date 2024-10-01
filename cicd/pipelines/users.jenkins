@@ -8,7 +8,7 @@ def workdir = "${workspace}/src/github.com/jenkinsci/kubernetes-operator/"
 podTemplate(label: 'my-pod-template2', containers: [
     containerTemplate(name: 'alpine', image: 'alpine:3.11', command: 'cat', ttyEnabled: true)
 ]) {
-    node('my-pod-template') {
+    node('my-pod-template2') {
         stage('Checkout Code') {
             // Checkout the repository where your k8s-deployment.yaml file is located
             checkout scm
