@@ -28,11 +28,10 @@ podTemplate(label: 'my-pod-template2', containers: [
                 def instance = Jenkins.get()
 
                 users.each { userInfo ->
-                    def user = User.getById(userInfo.username, true)
-                    user.setFullName(userInfo.fullName)
-                    user.addProperty(new Mailer.UserProperty(userInfo.email))
-
-                    def password = HudsonPrivateSecurityRealm.Details.fromPlainPassword(userInfo.password)
+                    def user = User.getById(userInfo.fields.username, true)
+                    user.setFullName(userInfo.fields.fullName)
+                    user.addProperty(new Mailer.UserProperty(userInfo.fields.email))
+                    def password = HudsonPrivateSecurityRealm.Details.fromPlainPassword(userInfo.fields.password)
                     user.addProperty(password)
 
                     user.save()
