@@ -24,7 +24,7 @@ podTemplate(label: 'my-pod-template2', containers: [
                 // Use readYaml to load the user data
                 def users = readYaml file: 'cicd/users/users.yaml'
 
-                // Use Jenkins.get() instead of Jenkins.getInstance()
+                // Get Jenkins instance directly
                 def instance = Jenkins.get()
 
                 users.each { userInfo ->
