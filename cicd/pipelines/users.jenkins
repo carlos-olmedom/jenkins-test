@@ -17,28 +17,17 @@ podTemplate(label: 'my-pod-template2', containers: [
             // Checkout the repository where your k8s-deployment.yaml file is located
             checkout scm
         }
-        stage('Run on Alpine') {
+        stage('Debug YAML Content') {
             container('alpine') {
-                sh 'echo "Running User Creation!"'
-
-                // Use readYaml to load the user data
-                def users = readYaml file: 'cicd/users/users.yaml'
-
-                // Get Jenkins instance directly
-                def instance = Jenkins.get()
-
-                users.each { userInfo ->
-                    def user = User.getById(userInfo.fields.username, true)
-                    user.setFullName(userInfo.fields.fullName)
-                    user.addProperty(new Mailer.UserProperty(userInfo.fields.email))
-                    def password = HudsonPrivateSecurityRealm.Details.fromPlainPassword(userInfo.fields.password)
-                    user.addProperty(password)
-
-                    user.save()
-                }
-
-                instance.save()
-            }
-        }
+                            sh 'echo "Debugging YAML content..."'
+                            
+                            // Load the user data from YAML
+                            def users = readYaml file: 'cicd/users/users.yaml'
+                    
+                            // Print the structure of users
+                            echo users.toString()  // This will print the parsed YAML content to the Jenkins log
+                        }
+                        }
+        
     }
 }
