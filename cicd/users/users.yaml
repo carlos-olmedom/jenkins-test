@@ -3,7 +3,22 @@ users:
     password: "password1"
     fullName: "User One"
     email: "user1@example.com"
+    role: "admin"
   - username: "user2"
     password: "password2"
     fullName: "User Two"
     email: "user2@example.com"
+    role: "developer"
+
+roles:
+  admin:
+    permissions:
+      - Jenkins.ADMINISTER
+  developer:
+    permissions:
+      - Item.BUILD
+      - Item.CONFIGURE
+      - Item.READ
+      - Item.CREATE
+      - Item.DELETE
+      - Item.WORKSPACE
