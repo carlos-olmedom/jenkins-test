@@ -1,0 +1,54 @@
+#!/usr/bin/env groovy
+
+def label = "k8s-${UUID.randomUUID().toString()}"
+def home = "/home/jenkins"
+def workspace = "${home}/workspace/build-jenkins-operator"
+def workdir = "${workspace}/src/github.com/jenkinsci/kubernetes-operator/"
+
+podTemplate(label: 'my-pod-template2', containers: [
+    containerTemplate(name: 'alpine', image: 'alpine:3.11', command: 'cat', ttyEnabled: true)
+]) {
+    node('my-pod-template') {
+        stage('Checkout Code') {
+            // Checkout the repository where your k8s-deployment.yaml file is located
+            checkout scm
+        }
+        stage('Run on Alpine') {
+            container('alpine') {
+                sh 'echo "Running User Creation!"'
+
+                // Load the user data from YAML (assuming the file is in YAML format)
+                def users = readYaml file: 'cicd/users/users.yaml'
+
+                // Use Groovy script to create users
+                script {
+                    def groovyScript = """
+                        import hudson.security.*
+                        import jenkins.model.*
+                        import jenkins.security.*
+
+                        def instance = Jenkins.getInstance()
+
+                        // Define users
+                        def users = ${users}
+
+                        users.each { userInfo ->
+                            def user = User.getById(userInfo.username, true)
+                            user.setFullName(userInfo.fullName)
+                            user.addProperty(new Mailer.UserProperty(userInfo.email))
+
+                            def password = HudsonPrivateSecurityRealm.Details.fromPlainPassword(userInfo.password)
+                            user.addProperty(password)
+
+                            user.save()
+                        }
+
+                        instance.save()
+                    """
+                    // Run the Groovy script within Jenkins instance
+                    evaluate(groovyScript)
+                }
+            }
+        }
+    }
+}
