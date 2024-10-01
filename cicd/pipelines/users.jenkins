@@ -20,34 +20,21 @@ podTemplate(label: 'my-pod-template2', containers: [
                 // Load the user data from YAML (assuming the file is in YAML format)
                 def users = readYaml file: 'cicd/users/users.yaml'
 
-                // Use Groovy script to create users
-                script {
-                    def groovyScript = """
-                        import hudson.security.*
-                        import jenkins.model.*
-                        import jenkins.security.*
+                // Create users directly in the script
+                def instance = Jenkins.getInstance()
 
-                        def instance = Jenkins.getInstance()
+                users.each { userInfo ->
+                    def user = User.getById(userInfo.username, true)
+                    user.setFullName(userInfo.fullName)
+                    user.addProperty(new Mailer.UserProperty(userInfo.email))
 
-                        // Define users
-                        def users = ${users}
+                    def password = HudsonPrivateSecurityRealm.Details.fromPlainPassword(userInfo.password)
+                    user.addProperty(password)
 
-                        users.each { userInfo ->
-                            def user = User.getById(userInfo.username, true)
-                            user.setFullName(userInfo.fullName)
-                            user.addProperty(new Mailer.UserProperty(userInfo.email))
-
-                            def password = HudsonPrivateSecurityRealm.Details.fromPlainPassword(userInfo.password)
-                            user.addProperty(password)
-
-                            user.save()
-                        }
-
-                        instance.save()
-                    """
-                    // Run the Groovy script within Jenkins instance
-                    evaluate(groovyScript)
+                    user.save()
                 }
+
+                instance.save()
             }
         }
     }
