@@ -4,6 +4,7 @@ def pipelines = [
     [name: 'pipeline-secrets', scriptPath: 'cicd/pipelines/secrets_pipeline.jenkins'],
     [name: 'pipeline-aws-s3', scriptPath: 'cicd/pipelines/s3_test.jenkins'],
     [name: 'pipeline-aws-k8s', scriptPath: 'cicd/pipelines/k8s_deploy.jenkins'],
+    [name: 'pipeline-users', scriptPath: 'cicd/pipelines/users.jenkins']
 ]
 
 pipelines.each { pipeline ->
