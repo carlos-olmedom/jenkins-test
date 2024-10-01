@@ -1,6 +1,5 @@
 #!/usr/bin/env groovy
 
-// Import statements should be at the top of the file
 import hudson.security.*
 import jenkins.model.*
 import hudson.tasks.Mailer
@@ -22,11 +21,11 @@ podTemplate(label: 'my-pod-template2', containers: [
             container('alpine') {
                 sh 'echo "Running User Creation!"'
 
-                // Load the user data from YAML (assuming the file is in YAML format)
+                // Use readYaml to load the user data
                 def users = readYaml file: 'cicd/users/users.yaml'
 
-                // Create users directly in the script
-                def instance = Jenkins.getInstance()
+                // Use Jenkins.get() instead of Jenkins.getInstance()
+                def instance = Jenkins.get()
 
                 users.each { userInfo ->
                     def user = User.getById(userInfo.username, true)
