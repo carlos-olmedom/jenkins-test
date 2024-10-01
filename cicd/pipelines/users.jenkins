@@ -3,6 +3,8 @@
 import hudson.security.*
 import jenkins.model.*
 import hudson.tasks.Mailer
+import com.michelin.cio.hudson.plugins.rolestrategy.*
+import org.yaml.snakeyaml.Yaml
 
 def label = "k8s-${UUID.randomUUID().toString()}"
 def home = "/home/jenkins"
@@ -14,18 +16,40 @@ podTemplate(label: 'my-pod-template2', containers: [
 ]) {
     node('my-pod-template2') {
         stage('Checkout Code') {
-            // Checkout the repository where your k8s-deployment.yaml file is located
+            // Checkout the repository where your users.yaml file is located
             checkout scm
         }
         stage('Run on Alpine') {
             container('alpine') {
-                sh 'echo "Running User Creation!"'
+                sh 'echo "Running User and Role Creation!"'
 
-                // Load the user data from YAML
+                // Load the user and role data from YAML
                 def data = readYaml file: 'cicd/users/users.yaml'
 
-                // Access the 'users' key first
+                // Access the users and roles
                 def users = data.users
+                def roles = data.roles
+
+                // Create roles and assign permissions
+                def instance = Jenkins.get()
+                def authStrategy = instance.getAuthorizationStrategy()
+
+                if (!(authStrategy instanceof RoleBasedAuthorizationStrategy)) {
+                    // Ensure the authorization strategy is Role-Based
+                    authStrategy = new RoleBasedAuthorizationStrategy()
+                    instance.setAuthorizationStrategy(authStrategy)
+                }
+
+                // Get the global role map
+                def globalRoleMap = authStrategy.getRoleMap(RoleBasedAuthorizationStrategy.GLOBAL)
+
+                // Create roles
+                roles.each { roleName, roleInfo ->
+                    def permissions = roleInfo.permissions.collect { Permission.fromId(it) }
+                    def role = new Role(roleName, permissions)
+                    globalRoleMap.addRole(role)
+                    echo "Created role '${roleName}' with permissions."
+                }
 
                 // Iterate over each user and create them in Jenkins
                 users.each { userInfo ->
@@ -33,8 +57,9 @@ podTemplate(label: 'my-pod-template2', containers: [
                     def password = userInfo.password
                     def fullName = userInfo.fullName
                     def email = userInfo.email
+                    def role = userInfo.role
 
-                    echo "Creating user: ${username}, Full name: ${fullName}, Email: ${email}"
+                    echo "Creating user: ${username}, Full name: ${fullName}, Email: ${email}, Role: ${role}"
 
                     // Create or update the user in Jenkins
                     def user = User.getById(username, true)
@@ -45,10 +70,18 @@ podTemplate(label: 'my-pod-template2', containers: [
                     user.addProperty(passwordProperty)
 
                     user.save()
+
+                    // Assign the user to the role
+                    def userRole = globalRoleMap.getRole(role)
+                    if (userRole) {
+                        globalRoleMap.assignRole(userRole, username)
+                        echo "Assigned role '${role}' to user '${username}'."
+                    } else {
+                        echo "Role '${role}' not found for user '${username}'."
+                    }
                 }
 
                 // Save Jenkins instance
-                def instance = Jenkins.get()
                 instance.save()
             }
         }
