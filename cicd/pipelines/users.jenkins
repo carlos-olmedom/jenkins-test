@@ -17,6 +17,10 @@ podTemplate(label: 'my-pod-template2', containers: [
             container('alpine') {
                 sh 'echo "Running User Creation!"'
 
+                import hudson.security.*
+                import jenkins.model.*
+                import hudson.tasks.Mailer // Make sure this is imported
+
                 // Load the user data from YAML (assuming the file is in YAML format)
                 def users = readYaml file: 'cicd/users/users.yaml'
 
