@@ -17,17 +17,40 @@ podTemplate(label: 'my-pod-template2', containers: [
             // Checkout the repository where your k8s-deployment.yaml file is located
             checkout scm
         }
-        stage('Debug YAML Content') {
+        stage('Run on Alpine') {
             container('alpine') {
-                            sh 'echo "Debugging YAML content..."'
-                            
-                            // Load the user data from YAML
-                            def users = readYaml file: 'cicd/users/users.yaml'
-                    
-                            // Print the structure of users
-                            echo users.toString()  // This will print the parsed YAML content to the Jenkins log
-                        }
-                        }
-        
+                sh 'echo "Running User Creation!"'
+
+                // Load the user data from YAML
+                def data = readYaml file: 'cicd/users/users.yaml'
+
+                // Access the 'users' key first
+                def users = data.users
+
+                // Iterate over each user and create them in Jenkins
+                users.each { userInfo ->
+                    def username = userInfo.username
+                    def password = userInfo.password
+                    def fullName = userInfo.fullName
+                    def email = userInfo.email
+
+                    echo "Creating user: ${username}, Full name: ${fullName}, Email: ${email}"
+
+                    // Create or update the user in Jenkins
+                    def user = User.getById(username, true)
+                    user.setFullName(fullName)
+                    user.addProperty(new Mailer.UserProperty(email))
+
+                    def passwordProperty = HudsonPrivateSecurityRealm.Details.fromPlainPassword(password)
+                    user.addProperty(passwordProperty)
+
+                    user.save()
+                }
+
+                // Save Jenkins instance
+                def instance = Jenkins.get()
+                instance.save()
+            }
+        }
     }
 }
