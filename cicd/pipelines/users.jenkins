@@ -99,21 +99,6 @@ podTemplate(label: 'my-pod-template2', containers: [
                     }
                 }
 
-                // Ensure Jenkins Operator service account has necessary permissions
-                def operatorServiceAccount = "jenkins-operator" // Replace with your service account name
-                def operatorRole = globalRoleMap.getRole("jenkins-operator")
-                if (operatorRole) {
-                    def currentAssignees = globalRoleMap.getSidsForRole(operatorRole)
-                    if (!currentAssignees.contains(operatorServiceAccount)) {
-                        globalRoleMap.assignRole(operatorRole, operatorServiceAccount)
-                        echo "Assigned 'jenkins-operator' role to Jenkins Operator service account."
-                    } else {
-                        echo "Jenkins Operator service account already has 'jenkins-operator' role."
-                    }
-                } else {
-                    echo "Role 'jenkins-operator' not found. Please ensure it exists in the YAML."
-                }
-
                 // Save Jenkins instance after making changes
                 instance.save()
             }
