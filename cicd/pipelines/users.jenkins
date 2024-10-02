@@ -1,5 +1,3 @@
-#!/usr/bin/env groovy
-
 import hudson.security.*
 import jenkins.model.*
 import hudson.tasks.Mailer
@@ -7,9 +5,6 @@ import com.michelin.cio.hudson.plugins.rolestrategy.*
 import org.yaml.snakeyaml.Yaml
 
 def label = "k8s-${UUID.randomUUID().toString()}"
-def home = "/home/jenkins"
-def workspace = "${home}/workspace/build-jenkins-operator"
-def workdir = "${workspace}/src/github.com/jenkinsci/kubernetes-operator/"
 
 podTemplate(label: 'my-pod-template2', containers: [
     containerTemplate(name: 'alpine', image: 'alpine:3.11', command: 'cat', ttyEnabled: true)
@@ -30,28 +25,39 @@ podTemplate(label: 'my-pod-template2', containers: [
                 def users = data.users
                 def roles = data.roles
 
-                // Create roles and assign permissions
+                // Get Jenkins instance and the current Authorization Strategy
                 def instance = Jenkins.get()
                 def authStrategy = instance.getAuthorizationStrategy()
 
+                // Preserve existing Role-Based Authorization Strategy if present
                 if (!(authStrategy instanceof RoleBasedAuthorizationStrategy)) {
-                    // Ensure the authorization strategy is Role-Based
+                    // Set Role-Based Authorization Strategy if it's not already set
                     authStrategy = new RoleBasedAuthorizationStrategy()
                     instance.setAuthorizationStrategy(authStrategy)
+                } else {
+                    echo "Preserving existing Role-Based Authorization Strategy"
                 }
 
-                // Get the global role map
+                // Get the existing global role map (so we don't overwrite existing roles)
                 def globalRoleMap = authStrategy.getRoleMap(RoleBasedAuthorizationStrategy.GLOBAL)
 
-                // Create roles
+                // Create or update roles
                 roles.each { roleName, roleInfo ->
                     def permissions = roleInfo.permissions.collect { Permission.fromId(it) }
-                    def role = new Role(roleName, permissions)
-                    globalRoleMap.addRole(role)
-                    echo "Created role '${roleName}' with permissions."
+
+                    // If role exists, update its permissions; otherwise, create a new role
+                    def existingRole = globalRoleMap.getRole(roleName)
+                    if (existingRole) {
+                        echo "Updating existing role '${roleName}'"
+                        globalRoleMap.addRole(new Role(roleName, permissions)) // Update role with new permissions
+                    } else {
+                        echo "Creating new role '${roleName}' with permissions."
+                        def role = new Role(roleName, permissions)
+                        globalRoleMap.addRole(role)
+                    }
                 }
 
-                // Iterate over each user and create them in Jenkins
+                // Iterate over each user and create or update them in Jenkins
                 users.each { userInfo ->
                     def username = userInfo.username
                     def password = userInfo.password
@@ -59,7 +65,7 @@ podTemplate(label: 'my-pod-template2', containers: [
                     def email = userInfo.email
                     def role = userInfo.role
 
-                    echo "Creating user: ${username}, Full name: ${fullName}, Email: ${email}, Role: ${role}"
+                    echo "Creating or updating user: ${username}, Full name: ${fullName}, Email: ${email}, Role: ${role}"
 
                     // Create or update the user in Jenkins
                     def user = User.getById(username, true)
@@ -81,7 +87,7 @@ podTemplate(label: 'my-pod-template2', containers: [
                     }
                 }
 
-                // Save Jenkins instance
+                // Save Jenkins instance after making changes
                 instance.save()
             }
         }
