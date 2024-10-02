@@ -13,6 +13,7 @@ users:
 roles:
   developer:
     permissions:
+      - Overall.Read
       - Item.BUILD
       - Item.CONFIGURE
       - Item.READ
