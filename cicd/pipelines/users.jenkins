@@ -29,19 +29,20 @@ podTemplate(label: 'my-pod-template2', containers: [
                 def instance = Jenkins.get()
                 def authStrategy = instance.getAuthorizationStrategy()
 
-                // Preserve existing Role-Based Authorization Strategy if present
+                // Ensure we're using Role-Based Authorization Strategy
                 if (!(authStrategy instanceof RoleBasedAuthorizationStrategy)) {
-                    // Set Role-Based Authorization Strategy if it's not already set
+                    // If not, set it up but be cautious as this can impact current permissions
                     authStrategy = new RoleBasedAuthorizationStrategy()
                     instance.setAuthorizationStrategy(authStrategy)
+                    echo "Switched to Role-Based Authorization Strategy"
                 } else {
-                    echo "Preserving existing Role-Based Authorization Strategy"
+                    echo "Using existing Role-Based Authorization Strategy"
                 }
 
-                // Get the existing global role map (so we don't overwrite existing roles)
+                // Get the existing global role map
                 def globalRoleMap = authStrategy.getRoleMap(RoleBasedAuthorizationStrategy.GLOBAL)
 
-                // Create or update roles
+                // Create or update roles without overwriting existing ones
                 roles.each { roleName, roleInfo ->
                     def permissions = roleInfo.permissions.collect { Permission.fromId(it) }
 
@@ -49,7 +50,13 @@ podTemplate(label: 'my-pod-template2', containers: [
                     def existingRole = globalRoleMap.getRole(roleName)
                     if (existingRole) {
                         echo "Updating existing role '${roleName}'"
-                        globalRoleMap.addRole(new Role(roleName, permissions)) // Update role with new permissions
+                        // Combine existing permissions with new ones
+                        def updatedPermissions = new HashSet<Permission>(existingRole.getPermissions())
+                        updatedPermissions.addAll(permissions)
+                        // Remove the old role
+                        globalRoleMap.removeRole(existingRole)
+                        // Add the updated role
+                        globalRoleMap.addRole(new Role(roleName, updatedPermissions))
                     } else {
                         echo "Creating new role '${roleName}' with permissions."
                         def role = new Role(roleName, permissions)
@@ -57,17 +64,7 @@ podTemplate(label: 'my-pod-template2', containers: [
                     }
                 }
 
-                // Ensure Jenkins Operator service account has necessary permissions
-                def operatorServiceAccount = "jenkins-operator" // Replace with your service account name
-                def operatorRole = globalRoleMap.getRole("jenkins-operator")
-                if (operatorRole) {
-                    globalRoleMap.assignRole(operatorRole, operatorServiceAccount)
-                    echo "Assigned jenkins-operator role to Jenkins Operator service account."
-                } else {
-                    echo "Role 'jenkins-operator' not found. Please ensure it exists in the YAML."
-                }
-
-                // Iterate over each user and create or update them in Jenkins
+                // Assign roles to users without affecting existing assignments
                 users.each { userInfo ->
                     def username = userInfo.username
                     def password = userInfo.password
@@ -82,19 +79,39 @@ podTemplate(label: 'my-pod-template2', containers: [
                     user.setFullName(fullName)
                     user.addProperty(new Mailer.UserProperty(email))
 
-                    def passwordProperty = HudsonPrivateSecurityRealm.Details.fromPlainPassword(password)
+                    def passwordProperty = hudson.security.HudsonPrivateSecurityRealm.Details.fromPlainPassword(password)
                     user.addProperty(passwordProperty)
 
                     user.save()
 
-                    // Assign the user to the role
+                    // Assign the user to the role if not already assigned
                     def userRole = globalRoleMap.getRole(role)
                     if (userRole) {
-                        globalRoleMap.assignRole(userRole, username)
-                        echo "Assigned role '${role}' to user '${username}'."
+                        def currentAssignees = globalRoleMap.getSidsForRole(userRole)
+                        if (!currentAssignees.contains(username)) {
+                            globalRoleMap.assignRole(userRole, username)
+                            echo "Assigned role '${role}' to user '${username}'."
+                        } else {
+                            echo "User '${username}' already has role '${role}'."
+                        }
                     } else {
                         echo "Role '${role}' not found for user '${username}'."
                     }
+                }
+
+                // Ensure Jenkins Operator service account has necessary permissions
+                def operatorServiceAccount = "jenkins-operator" // Replace with your service account name
+                def operatorRole = globalRoleMap.getRole("jenkins-operator")
+                if (operatorRole) {
+                    def currentAssignees = globalRoleMap.getSidsForRole(operatorRole)
+                    if (!currentAssignees.contains(operatorServiceAccount)) {
+                        globalRoleMap.assignRole(operatorRole, operatorServiceAccount)
+                        echo "Assigned 'jenkins-operator' role to Jenkins Operator service account."
+                    } else {
+                        echo "Jenkins Operator service account already has 'jenkins-operator' role."
+                    }
+                } else {
+                    echo "Role 'jenkins-operator' not found. Please ensure it exists in the YAML."
                 }
 
                 // Save Jenkins instance after making changes
