@@ -57,6 +57,16 @@ podTemplate(label: 'my-pod-template2', containers: [
                     }
                 }
 
+                // Ensure Jenkins Operator retains necessary permissions
+                def operatorServiceAccount = "jenkins-operator" // replace with actual service account if different
+                def operatorRole = new Role("jenkins-operator-role", [
+                    Permission.fromId("Overall/Administer"),
+                    Permission.fromId("Overall/Read")
+                ])
+                globalRoleMap.addRole(operatorRole)
+                globalRoleMap.assignRole(operatorRole, operatorServiceAccount)
+                echo "Assigned Overall/Administer and Overall/Read to Jenkins Operator."
+
                 // Iterate over each user and create or update them in Jenkins
                 users.each { userInfo ->
                     def username = userInfo.username
