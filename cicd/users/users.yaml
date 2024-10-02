@@ -20,3 +20,7 @@ roles:
       - Item.CREATE
       - Item.DELETE
       - Item.WORKSPACE
+  jenkins-operator:
+    permissions:
+      - Overall.Read
+      - Overall.Administer
