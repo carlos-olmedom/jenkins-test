@@ -1,106 +1,162 @@
 import hudson.security.*
 import jenkins.model.*
 import hudson.tasks.Mailer
-import com.michelin.cio.hudson.plugins.rolestrategy.*
 import org.yaml.snakeyaml.Yaml
+import java.io.FileInputStream
 
-def label = "k8s-${UUID.randomUUID().toString()}"
+pipeline {
+    agent none
 
-podTemplate(label: 'my-pod-template2', containers: [
-    containerTemplate(name: 'alpine', image: 'alpine:3.11', command: 'cat', ttyEnabled: true)
-]) {
-    node('my-pod-template2') {
+    stages {
         stage('Checkout Code') {
-            // Checkout the repository where your users.yaml file is located
-            checkout scm
+            agent {
+                node {
+                    label '' // Runs on any available agent; adjust as needed
+                }
+            }
+            steps {
+                checkout scm
+            }
         }
-        stage('Run on Alpine') {
-            container('alpine') {
-                sh 'echo "Running User and Role Creation!"'
-
-                // Load the user and role data from YAML
-                def data = readYaml file: 'cicd/users/users.yaml'
-
-                // Access the users and roles
-                def users = data.users
-                def roles = data.roles
-
-                // Get Jenkins instance and the current Authorization Strategy
-                def instance = Jenkins.get()
-                def authStrategy = instance.getAuthorizationStrategy()
-
-                // Ensure we're using Role-Based Authorization Strategy
-                if (!(authStrategy instanceof RoleBasedAuthorizationStrategy)) {
-                    // If not, set it up but be cautious as this can impact current permissions
-                    authStrategy = new RoleBasedAuthorizationStrategy()
-                    instance.setAuthorizationStrategy(authStrategy)
-                    echo "Switched to Role-Based Authorization Strategy"
-                } else {
-                    echo "Using existing Role-Based Authorization Strategy"
+        stage('Update Users and Roles') {
+            agent {
+                node {
+                    label 'master' // Ensures the script runs on the Jenkins controller
                 }
+            }
+            steps {
+                script {
+                    // Path to your YAML file
+                    def yamlFilePath = 'cicd/users/users.yaml' // Adjust the path as needed
 
-                // Get the existing global role map
-                def globalRoleMap = authStrategy.getRoleMap(RoleBasedAuthorizationStrategy.GLOBAL)
-
-                // Create or update roles without overwriting existing ones
-                roles.each { roleName, roleInfo ->
-                    def permissions = roleInfo.permissions.collect { Permission.fromId(it) }
-
-                    // If role exists, update its permissions; otherwise, create a new role
-                    def existingRole = globalRoleMap.getRole(roleName)
-                    if (existingRole) {
-                        echo "Updating existing role '${roleName}'"
-                        // Combine existing permissions with new ones
-                        def updatedPermissions = new HashSet<Permission>(existingRole.getPermissions())
-                        updatedPermissions.addAll(permissions)
-                        // Remove the old role
-                        globalRoleMap.removeRole(existingRole)
-                        // Add the updated role
-                        globalRoleMap.addRole(new Role(roleName, updatedPermissions))
+                    // Load the user and role data from YAML file
+                    def yaml = new Yaml()
+                    def data
+                    def yamlFile = new File(yamlFilePath)
+                    if (yamlFile.exists()) {
+                        data = yaml.load(new FileInputStream(yamlFile))
                     } else {
-                        echo "Creating new role '${roleName}' with permissions."
-                        def role = new Role(roleName, permissions)
-                        globalRoleMap.addRole(role)
+                        println "YAML file not found at ${yamlFilePath}"
+                        return
                     }
-                }
 
-                // Assign roles to users without affecting existing assignments
-                users.each { userInfo ->
-                    def username = userInfo.username
-                    def password = userInfo.password
-                    def fullName = userInfo.fullName
-                    def email = userInfo.email
-                    def role = userInfo.role
+                    // Access the users and roles
+                    def users = data.users
+                    def roles = data.roles
 
-                    echo "Creating or updating user: ${username}, Full name: ${fullName}, Email: ${email}, Role: ${role}"
+                    // Get Jenkins instance and the current Authorization Strategy
+                    def instance = Jenkins.getInstance()
+                    def authStrategy = instance.getAuthorizationStrategy()
 
-                    // Create or update the user in Jenkins
-                    def user = User.getById(username, true)
-                    user.setFullName(fullName)
-                    user.addProperty(new Mailer.UserProperty(email))
+                    // Check the current authorization strategy
+                    if (authStrategy instanceof hudson.security.GlobalMatrixAuthorizationStrategy) {
+                        println "Using Matrix-Based Security Authorization Strategy"
 
-                    def passwordProperty = hudson.security.HudsonPrivateSecurityRealm.Details.fromPlainPassword(password)
-                    user.addProperty(passwordProperty)
+                        // Add users and permissions to Matrix-Based Security
+                        users.each { userInfo ->
+                            def username = userInfo.username
+                            def password = userInfo.password
+                            def fullName = userInfo.fullName
+                            def email = userInfo.email
+                            def permissions = roles[userInfo.role]?.permissions
 
-                    user.save()
+                            println "Creating or updating user: ${username}, Full name: ${fullName}, Email: ${email}"
 
-                    // Assign the user to the role if not already assigned
-                    def userRole = globalRoleMap.getRole(role)
-                    if (userRole) {
-                        def currentAssignees = globalRoleMap.getSidsForRole(userRole)
-                        if (!currentAssignees.contains(username)) {
-                            globalRoleMap.assignRole(userRole, username)
-                            echo "Assigned role '${role}' to user '${username}'."
-                        } else {
-                            echo "User '${username}' already has role '${role}'."
+                            // Create or update the user in Jenkins
+                            def user = User.getById(username, true)
+                            user.setFullName(fullName)
+                            user.addProperty(new Mailer.UserProperty(email))
+
+                            // Set password
+                            def passwordProperty = hudson.security.HudsonPrivateSecurityRealm.Details.fromPlainPassword(password)
+                            user.addProperty(passwordProperty)
+                            user.save()
+
+                            // Grant permissions to the user
+                            permissions.each { perm ->
+                                def permission = Permission.fromId(perm)
+                                if (permission != null) {
+                                    authStrategy.add(permission, username)
+                                    println "Granted permission '${perm}' to user '${username}'."
+                                } else {
+                                    println "Permission '${perm}' not found."
+                                }
+                            }
                         }
+
+                        // Save Jenkins instance after making changes
+                        instance.save()
+
+                    } else if (authStrategy instanceof com.michelin.cio.hudson.plugins.rolestrategy.RoleBasedAuthorizationStrategy) {
+                        println "Using Role-Based Authorization Strategy"
+
+                        // Get the existing global role map
+                        def globalRoleMap = authStrategy.getRoleMap(RoleBasedAuthorizationStrategy.GLOBAL)
+
+                        // Create or update roles without overwriting existing ones
+                        roles.each { roleName, roleInfo ->
+                            def permissions = roleInfo.permissions.collect { Permission.fromId(it) }
+
+                            // Check if the role already exists
+                            def existingRole = globalRoleMap.getRole(roleName)
+                            if (existingRole) {
+                                println "Updating existing role '${roleName}'"
+                                // Combine existing permissions with new ones
+                                def updatedPermissions = new HashSet<Permission>(existingRole.getPermissions())
+                                updatedPermissions.addAll(permissions)
+                                // Remove the old role and add the updated role
+                                globalRoleMap.removeRole(existingRole)
+                                globalRoleMap.addRole(new Role(roleName, updatedPermissions))
+                            } else {
+                                println "Creating new role '${roleName}' with permissions."
+                                def role = new Role(roleName, permissions)
+                                globalRoleMap.addRole(role)
+                            }
+                        }
+
+                        // Assign roles to users without affecting existing assignments
+                        users.each { userInfo ->
+                            def username = userInfo.username
+                            def password = userInfo.password
+                            def fullName = userInfo.fullName
+                            def email = userInfo.email
+                            def role = userInfo.role
+
+                            println "Creating or updating user: ${username}, Full name: ${fullName}, Email: ${email}, Role: ${role}"
+
+                            // Create or update the user in Jenkins
+                            def user = User.getById(username, true)
+                            user.setFullName(fullName)
+                            user.addProperty(new Mailer.UserProperty(email))
+
+                            // Set password
+                            def passwordProperty = hudson.security.HudsonPrivateSecurityRealm.Details.fromPlainPassword(password)
+                            user.addProperty(passwordProperty)
+                            user.save()
+
+                            // Assign the user to the role if not already assigned
+                            def userRole = globalRoleMap.getRole(role)
+                            if (userRole) {
+                                def currentAssignees = globalRoleMap.getSidsForRole(userRole)
+                                if (!currentAssignees.contains(username)) {
+                                    globalRoleMap.assignRole(userRole, username)
+                                    println "Assigned role '${role}' to user '${username}'."
+                                } else {
+                                    println "User '${username}' already has role '${role}'."
+                                }
+                            } else {
+                                println "Role '${role}' not found for user '${username}'."
+                            }
+                        }
+
+                        // Save Jenkins instance after making changes
+                        instance.save()
+
                     } else {
-                        echo "Role '${role}' not found for user '${username}'."
+                        println "Authorization strategy is not supported by this script."
+                        println "Current strategy: ${authStrategy.getClass()}"
                     }
                 }
-
-                // Save Jenkins instance after making changes
-                instance.save()
             }
         }
     }
