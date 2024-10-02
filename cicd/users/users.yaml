@@ -13,14 +13,10 @@ users:
 roles:
   developer:
     permissions:
-      - Overall.Read
-      - Item.BUILD
-      - Item.CONFIGURE
-      - Item.READ
-      - Item.CREATE
-      - Item.DELETE
-      - Item.WORKSPACE
-  jenkins-operator:
-    permissions:
-      - Overall.Read
-      - Overall.Administer
+      - "Overall/Read"
+      - "Item/Build"
+      - "Item/Configure"
+      - "Item/Read"
+      - "Item/Create"
+      - "Item/Delete"
+      - "Item/Workspace"
