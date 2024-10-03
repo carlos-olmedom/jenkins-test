@@ -1,0 +1,47 @@
+#!/usr/bin/env groovy
+
+def label = "k8s-${UUID.randomUUID().toString()}"
+def home = "/home/jenkins"
+def workspace = "${home}/workspace/build-jenkins-operator"
+def workdir = "${workspace}/src/github.com/jenkinsci/kubernetes-operator/"
+
+podTemplate(label: 'my-pod-template2', containers: [
+    containerTemplate(name: 'python', image: 'python:3.8-slim', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'sonar-scanner', image: 'sonarsource/sonar-scanner-cli:latest', command: 'cat', ttyEnabled: true)
+]) {
+    node('my-pod-template2') {
+        stage('Clone Repository') {
+            git url: 'https://github.com/your-username/sonar-python-test.git', branch: 'master'
+        }
+
+        stage('Install Dependencies') {
+            container('python') {
+                sh 'pip install pytest pytest-cov'
+            }
+        }
+
+        stage('Run Tests with Coverage') {
+            container('python') {
+                sh 'pytest --cov=app --cov-report=xml'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            container('sonar-scanner') {
+                // Use credentials to securely retrieve the SonarQube token
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_AUTH_TOKEN')]) {
+                    def SONAR_HOST_URL = 'http://sonarqube-sonarqube.sonarqube.svc.cluster.local:9000'
+                    
+                    // Run the SonarQube Scanner with the retrieved token
+                    sh """
+                        sonar-scanner \
+                          -Dsonar.projectKey=python-sonarqube-test \
+                          -Dsonar.sources=. \
+                          -Dsonar.host.url=${SONAR_HOST_URL} \
+                          -Dsonar.login=${SONAR_AUTH_TOKEN}
+                    """
+                }
+            }
+        }
+    }
+}
