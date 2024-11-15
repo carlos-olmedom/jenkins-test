@@ -21,7 +21,6 @@ pipelines.each { pipeline ->
                     git {
                         remote {
                             url('https://github.com/carlos-olmedom/jenkins-test.git')
-                            credentials('jenkins-operator')
                         }
                         branches('*/main')  // All pipelines come from the same branch 'main'
                     }
